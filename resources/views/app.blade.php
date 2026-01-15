@@ -19,6 +19,11 @@
             })();
         </script>
 
+        {{-- TinyMCE API key (exposed for the Vue wrapper component) --}}
+        <script>
+            window.TINYMCE_API_KEY = @json(config('services.tinymce.api_key'));
+        </script>
+
         {{-- Inline style to set the HTML background color based on our theme in app.css --}}
         <style>
             html {

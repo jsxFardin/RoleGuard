@@ -125,9 +125,9 @@
                         <!-- Content -->
                         <div class="rounded-lg border border-border bg-card p-6">
                             <h2 class="mb-4 text-xl font-semibold">Content</h2>
-                            <RichTextEditor
+                            <AppTextEditor
                                 v-model="form.content"
-                                placeholder="Enter detailed service content..."
+                                :height="500"
                             />
                         </div>
 
@@ -181,7 +181,7 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
-import RichTextEditor from '@/components/admin/RichTextEditor.vue';
+import AppTextEditor from '@/components/AppTextEditor.vue';
 
 interface Props {
     service: {

@@ -11,15 +11,44 @@ use Inertia\Response;
 
 class ServiceController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $services = Service::with('parent', 'children')
+        $query = Service::with('parent')
+            ->orderBy('parent_id')
             ->orderBy('sort_order')
-            ->get()
-            ->groupBy('parent_id');
+            ->orderBy('title');
+
+        if ($request->filled('search')) {
+            $search = $request->string('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('status')) {
+            $query->where('is_active', $request->integer('status'));
+        }
+
+        if ($request->filled('parent')) {
+            if ($request->string('parent')->toString() === 'none') {
+                $query->whereNull('parent_id');
+            } else {
+                $query->where('parent_id', $request->integer('parent'));
+            }
+        }
+
+        $services = $query->paginate(15)->withQueryString();
+
+        $parentServices = Service::parents()
+            ->orderBy('sort_order')
+            ->orderBy('title')
+            ->get(['id', 'title']);
 
         return Inertia::render('admin/Services/Index', [
             'services' => $services,
+            'parentServices' => $parentServices,
+            'filters' => $request->only(['search', 'status', 'parent']),
         ]);
     }
 

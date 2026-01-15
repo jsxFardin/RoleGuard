@@ -1,3 +1,11 @@
+export {};
+
+declare global {
+    interface Window {
+        TINYMCE_API_KEY?: string | null;
+    }
+}
+
 import { AppPageProps } from '@/types/index';
 
 // Extend ImportMeta interface for Vite...

@@ -2,6 +2,17 @@
     <AppLayout>
 
         <Head title="FAQs Management" />
+        <ConfirmDialog
+            v-model:open="confirmOpen"
+            title="Delete FAQ?"
+            description="This will permanently delete the FAQ. This action cannot be undone."
+            :details="confirmDetails"
+            confirm-text="Delete"
+            confirm-variant="destructive"
+            :loading="deleting"
+            loading-text="Deleting..."
+            @confirm="confirmDelete"
+        />
         <div class="flex items-center justify-between">
             <h1 class="text-3xl font-bold">FAQs Management</h1>
             <Link :href="faqsCreate().url"
@@ -130,6 +141,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import DataTable from '@/components/admin/DataTable.vue';
+import ConfirmDialog from '@/components/admin/ConfirmDialog.vue';
 import {
     index as faqsIndex,
     destroy as faqsDestroy,
@@ -200,11 +212,7 @@ const actions = [
         label: 'Delete',
         icon: 'trash2',
         variant: 'destructive' as const,
-        onClick: (row: any) => {
-            if (confirm(`Are you sure you want to delete this FAQ?`)) {
-                router.delete(faqsDestroy({ faq: row.id }).url);
-            }
-        },
+        onClick: (row: any) => openDeleteDialog(row),
     },
 ];
 
@@ -214,6 +222,30 @@ const pagination = computed(() => ({
     to: props.faqs.to,
     total: props.faqs.total,
 }));
+
+const confirmOpen = ref(false);
+const deleting = ref(false);
+const pendingDelete = ref<{ id: number; question: string } | null>(null);
+const confirmDetails = computed(() => pendingDelete.value?.question || '');
+
+const openDeleteDialog = (row: any) => {
+    pendingDelete.value = { id: row.id, question: row.question };
+    confirmOpen.value = true;
+};
+
+const confirmDelete = () => {
+    if (!pendingDelete.value) return;
+
+    deleting.value = true;
+    router.delete(faqsDestroy({ faq: pendingDelete.value.id }).url, {
+        preserveScroll: true,
+        onFinish: () => {
+            deleting.value = false;
+            confirmOpen.value = false;
+            pendingDelete.value = null;
+        },
+    });
+};
 
 const handleSearch = () => {
     router.get(
