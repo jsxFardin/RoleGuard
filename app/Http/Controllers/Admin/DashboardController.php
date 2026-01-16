@@ -19,7 +19,7 @@ class DashboardController extends Controller implements HasMiddleware
 
     public function __invoke(): Response
     {
-        return Inertia::render('Dashboard');
+        return Inertia::render('admin/Dashboard');
     }
 }
 
