@@ -16,26 +16,44 @@ import { index as servicesIndex } from '@/routes/admin/services';
 import { index as faqsIndex } from '@/routes/admin/faqs';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import {LayoutGrid, Package, HelpCircle } from 'lucide-vue-next';
+import {LayoutGrid, Package, HelpCircle, Users, Shield } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
+import { computed } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-    {
-        title: 'Services',
-        href: servicesIndex(),
-        icon: Package,
-    },
-    {
-        title: 'FAQs',
-        href: faqsIndex(),
-        icon: HelpCircle,
+const page = usePage<any>();
+const permissions = computed<string[]>(() => page.props.auth?.permissions || []);
+const canAny = (slugs: string[]) => slugs.some((s) => permissions.value.includes(s));
+
+const mainNavItems = computed<NavItem[]>(() => {
+    const items: NavItem[] = [
+        { title: 'Dashboard', href: dashboard(), icon: LayoutGrid },
+    ];
+
+    if (canAny(['services.list', 'services.view', 'services.create', 'services.update', 'services.delete'])) {
+        items.push({ title: 'Services', href: servicesIndex(), icon: Package });
     }
-];
+
+    if (canAny(['faqs.list', 'faqs.view', 'faqs.create', 'faqs.update', 'faqs.delete'])) {
+        items.push({ title: 'FAQs', href: faqsIndex(), icon: HelpCircle });
+    }
+
+    return items;
+});
+
+const userRoleNavItems = computed<NavItem[]>(() => {
+    const items: NavItem[] = [];
+
+    if (canAny(['users.list', 'users.update', 'users.view'])) {
+        items.push({ title: 'Users', href: '/admin/users', icon: Users });
+    }
+
+    if (canAny(['roles.list', 'roles.create', 'roles.update', 'roles.delete'])) {
+        items.push({ title: 'Roles', href: '/admin/roles', icon: Shield });
+    }
+
+    return items;
+});
 
 // const footerNavItems: NavItem[] = [
 //     {
@@ -66,7 +84,8 @@ const mainNavItems: NavItem[] = [
         </SidebarHeader>
 
         <SidebarContent>
-            <NavMain :items="mainNavItems" />
+            <NavMain label="Main" :items="mainNavItems" />
+            <NavMain v-if="userRoleNavItems.length" label="Users & Roles" :items="userRoleNavItems" />
         </SidebarContent>
 
         <SidebarFooter>

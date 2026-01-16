@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Model;
 
 class ContactInformation extends Model
 {
+    use Auditable;
+
     protected $table = 'contact_information';
 
     protected $fillable = [
