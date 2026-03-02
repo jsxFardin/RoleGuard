@@ -32,7 +32,7 @@
                                 </CardDescription>
                             </CardHeader>
                             <CardContent class="space-y-4">
-                                <div>
+                                <div class="space-y-2">
                                     <Label for="name">
                                         Name <span class="text-destructive">*</span>
                                     </Label>
@@ -46,7 +46,7 @@
                                     <InputError :message="form.errors.name" />
                                 </div>
 
-                                <div>
+                                <div class="space-y-2">
                                     <Label for="slug">Slug</Label>
                                     <Input
                                         id="slug"
@@ -60,7 +60,7 @@
                                     <InputError :message="form.errors.slug" />
                                 </div>
 
-                                <div>
+                                <div class="space-y-2">
                                     <Label for="description">Description</Label>
                                     <textarea
                                         id="description"
