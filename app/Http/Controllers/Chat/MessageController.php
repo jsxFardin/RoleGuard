@@ -14,6 +14,8 @@ class MessageController extends Controller
     {
         $this->ensureParticipant($request, $conversation);
         $authUserId = (int) $request->user()->id;
+        $beforeId = $request->integer('before_id');
+        $perPage = 30;
 
         $conversation->messages()
             ->where('user_id', '!=', $authUserId)
@@ -22,13 +24,24 @@ class MessageController extends Controller
                 'read_at' => now(),
             ]);
 
-        $messages = $conversation->messages()
+        $messagesQuery = $conversation->messages();
+
+        if ($beforeId > 0) {
+            $messagesQuery->where('id', '<', $beforeId);
+        }
+
+        $messages = $messagesQuery
             ->with('user:id,name,email')
             ->latest('id')
-            ->limit(50)
+            ->limit($perPage)
             ->get()
             ->reverse()
             ->values();
+
+        $oldestMessageId = $messages->first()?->id;
+        $hasMore = $oldestMessageId
+            ? $conversation->messages()->where('id', '<', $oldestMessageId)->exists()
+            : false;
 
         return response()->json([
             'messages' => $messages->map(fn ($message) => [
@@ -41,6 +54,8 @@ class MessageController extends Controller
                     'email' => $message->user->email,
                 ],
             ])->values(),
+            'has_more' => $hasMore,
+            'oldest_message_id' => $oldestMessageId,
         ]);
     }
 

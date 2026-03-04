@@ -35,6 +35,12 @@ interface MessageSentPayload {
     message: ChatMessage;
 }
 
+interface ConversationPaginationState {
+    has_more: boolean;
+    oldest_message_id: number | null;
+    is_loading_older: boolean;
+}
+
 const props = defineProps<Props>();
 const page = usePage<any>();
 const authUserId = Number(page.props.auth?.user?.id ?? 0);
@@ -47,6 +53,10 @@ const isSending = ref(false);
 const isLoadingMessages = ref(false);
 const subscribedConversationIds = ref<number[]>([]);
 const messagesContainerRef = ref<HTMLElement | null>(null);
+const topSentinelRef = ref<HTMLElement | null>(null);
+const topSentinelObserver = ref<IntersectionObserver | null>(null);
+const unseenIncomingCount = ref(0);
+const paginationByConversation = ref<Record<number, ConversationPaginationState>>({});
 
 const activeConversation = computed(() =>
     conversations.value.find((conversation) => conversation.id === activeConversationId.value) ?? null,
@@ -56,6 +66,14 @@ const activeMessages = computed(() => {
     if (!activeConversationId.value) return [];
 
     return messagesByConversation.value[activeConversationId.value] ?? [];
+});
+
+const activePagination = computed(() => {
+    if (!activeConversationId.value) {
+        return null;
+    }
+
+    return paginationByConversation.value[activeConversationId.value] ?? null;
 });
 
 const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
@@ -94,6 +112,28 @@ const isOwnMessage = (message: ChatMessage): boolean => {
     return message.user.id === authUserId;
 };
 
+const getPaginationState = (conversationId: number): ConversationPaginationState => {
+    if (!paginationByConversation.value[conversationId]) {
+        paginationByConversation.value[conversationId] = {
+            has_more: false,
+            oldest_message_id: null,
+            is_loading_older: false,
+        };
+    }
+
+    return paginationByConversation.value[conversationId];
+};
+
+const isNearBottom = (): boolean => {
+    if (!messagesContainerRef.value) {
+        return true;
+    }
+
+    const { scrollTop, clientHeight, scrollHeight } = messagesContainerRef.value;
+
+    return scrollHeight - (scrollTop + clientHeight) < 100;
+};
+
 const scrollMessagesToBottom = async () => {
     await nextTick();
 
@@ -102,6 +142,7 @@ const scrollMessagesToBottom = async () => {
     }
 
     messagesContainerRef.value.scrollTop = messagesContainerRef.value.scrollHeight;
+    unseenIncomingCount.value = 0;
 };
 
 const sortConversations = () => {
@@ -131,6 +172,12 @@ const loadMessages = async (conversationId: number) => {
 
         const data = await response.json();
         messagesByConversation.value[conversationId] = data.messages ?? [];
+        paginationByConversation.value[conversationId] = {
+            has_more: Boolean(data.has_more),
+            oldest_message_id: data.oldest_message_id ?? null,
+            is_loading_older: false,
+        };
+        unseenIncomingCount.value = 0;
 
         const conversation = conversations.value.find((item) => item.id === conversationId);
         if (conversation) {
@@ -139,6 +186,86 @@ const loadMessages = async (conversationId: number) => {
     } finally {
         isLoadingMessages.value = false;
     }
+};
+
+const loadOlderMessages = async () => {
+    const conversationId = activeConversationId.value;
+
+    if (!conversationId) {
+        return;
+    }
+
+    const pagination = getPaginationState(conversationId);
+    if (!pagination.has_more || pagination.is_loading_older || !pagination.oldest_message_id) {
+        return;
+    }
+
+    pagination.is_loading_older = true;
+    const previousScrollHeight = messagesContainerRef.value?.scrollHeight ?? 0;
+    const previousScrollTop = messagesContainerRef.value?.scrollTop ?? 0;
+
+    try {
+        const response = await fetch(
+            `/chat/conversations/${conversationId}/messages?before_id=${pagination.oldest_message_id}`,
+            {
+                method: 'GET',
+                headers: {
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+            },
+        );
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data = await response.json();
+        const olderMessages: ChatMessage[] = data.messages ?? [];
+        const existing = messagesByConversation.value[conversationId] ?? [];
+        messagesByConversation.value[conversationId] = [...olderMessages, ...existing];
+
+        pagination.has_more = Boolean(data.has_more);
+        pagination.oldest_message_id = data.oldest_message_id ?? null;
+
+        await nextTick();
+
+        if (messagesContainerRef.value) {
+            const newScrollHeight = messagesContainerRef.value.scrollHeight;
+            messagesContainerRef.value.scrollTop = previousScrollTop + (newScrollHeight - previousScrollHeight);
+        }
+    } finally {
+        pagination.is_loading_older = false;
+    }
+};
+
+const setupTopSentinelObserver = async () => {
+    await nextTick();
+
+    if (topSentinelObserver.value) {
+        topSentinelObserver.value.disconnect();
+        topSentinelObserver.value = null;
+    }
+
+    if (!messagesContainerRef.value || !topSentinelRef.value) {
+        return;
+    }
+
+    topSentinelObserver.value = new IntersectionObserver(
+        (entries) => {
+            const entry = entries[0];
+            if (entry?.isIntersecting) {
+                void loadOlderMessages();
+            }
+        },
+        {
+            root: messagesContainerRef.value,
+            rootMargin: '120px 0px 0px 0px',
+            threshold: 0.01,
+        },
+    );
+
+    topSentinelObserver.value.observe(topSentinelRef.value);
 };
 
 const updateConversationPreview = (conversationId: number, message: ChatMessage) => {
@@ -180,7 +307,11 @@ const subscribeToConversation = (conversationId: number) => {
             }
 
             if (conversationId === activeConversationId.value) {
-                void scrollMessagesToBottom();
+                if (isNearBottom() || incomingMessage.user.id === authUserId) {
+                    void scrollMessagesToBottom();
+                } else if (incomingMessage.user.id !== authUserId) {
+                    unseenIncomingCount.value += 1;
+                }
             }
         }
     });
@@ -273,6 +404,28 @@ watch(
 
 watch(
     () => activeConversationId.value,
+    () => {
+        void setupTopSentinelObserver();
+    },
+    { immediate: true },
+);
+
+const handleMessagesScroll = () => {
+    if (!messagesContainerRef.value) {
+        return;
+    }
+
+    if (messagesContainerRef.value.scrollTop < 80) {
+        void loadOlderMessages();
+    }
+
+    if (isNearBottom()) {
+        unseenIncomingCount.value = 0;
+    }
+};
+
+watch(
+    () => activeConversationId.value,
     (conversationId) => {
         if (conversationId === null) {
             return;
@@ -290,9 +443,16 @@ onMounted(async () => {
         await loadMessages(activeConversationId.value);
         await scrollMessagesToBottom();
     }
+
+    await setupTopSentinelObserver();
 });
 
 onUnmounted(() => {
+    if (topSentinelObserver.value) {
+        topSentinelObserver.value.disconnect();
+        topSentinelObserver.value = null;
+    }
+
     if (window.Echo) {
         for (const conversationId of subscribedConversationIds.value) {
             window.Echo.leave(`conversation.${conversationId}`);
@@ -368,7 +528,19 @@ onUnmounted(() => {
                             </p>
                         </div>
 
-                        <div ref="messagesContainerRef" class="min-h-0 flex-1 space-y-3 overflow-y-auto bg-muted/10 p-4">
+                        <div
+                            ref="messagesContainerRef"
+                            class="min-h-0 flex-1 space-y-3 overflow-y-auto bg-muted/10 p-4"
+                            @scroll="handleMessagesScroll"
+                        >
+                            <div ref="topSentinelRef" class="h-px w-full" />
+
+                            <div v-if="activePagination?.is_loading_older" class="flex justify-center">
+                                <span class="rounded-md border bg-background px-3 py-1 text-xs text-muted-foreground">
+                                    Loading older messages...
+                                </span>
+                            </div>
+
                             <p v-if="isLoadingMessages" class="text-sm text-muted-foreground">Loading messages...</p>
 
                             <p v-else-if="activeMessages.length === 0" class="text-sm text-muted-foreground">
@@ -399,6 +571,15 @@ onUnmounted(() => {
                         </div>
 
                         <div class="border-t bg-background p-4">
+                            <div v-if="unseenIncomingCount > 0" class="mb-2 flex justify-center">
+                                <button
+                                    type="button"
+                                    class="rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground shadow"
+                                    @click="scrollMessagesToBottom"
+                                >
+                                    {{ unseenIncomingCount }} new message{{ unseenIncomingCount > 1 ? 's' : '' }}
+                                </button>
+                            </div>
                             <form class="flex items-center gap-2" @submit.prevent="sendMessage">
                                 <input
                                     v-model="messageBody"
