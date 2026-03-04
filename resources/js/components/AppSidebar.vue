@@ -15,7 +15,7 @@ import { dashboard } from '@/routes/admin';
 import { index as faqsIndex } from '@/routes/admin/faqs';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { LayoutGrid, HelpCircle, Users, Shield, ScrollText } from 'lucide-vue-next';
+import { LayoutGrid, HelpCircle, Users, Shield, ScrollText, MessageSquare } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 import { computed } from 'vue';
 import { usePage } from '@inertiajs/vue3';
@@ -29,6 +29,7 @@ const canAny = (slugs: string[]) => slugs.some((s) => permissions.value.includes
 const mainNavItems = computed<NavItem[]>(() => {
     const items: NavItem[] = [
         { title: t('nav.dashboard'), href: dashboard(), icon: LayoutGrid },
+        { title: t('nav.chat'), href: '/chat', icon: MessageSquare },
     ];
 
     if (canAny(['faqs.list', 'faqs.view', 'faqs.create', 'faqs.update', 'faqs.delete'])) {

@@ -17,6 +17,7 @@
     "nav": {
         "main": "মেনু",
         "dashboard": "ড্যাশবোর্ড",
+        "chat": "চ্যাট",
         "faqs": "এফএকিউ",
         "audit_logs": "অডিট লগ",
         "users_roles": "ইউজার ও রোল",

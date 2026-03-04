@@ -17,6 +17,7 @@
     "nav": {
         "main": "Main",
         "dashboard": "Dashboard",
+        "chat": "Chat",
         "faqs": "FAQs",
         "audit_logs": "Audit Logs",
         "users_roles": "Users & Roles",
